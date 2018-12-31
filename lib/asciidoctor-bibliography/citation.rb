@@ -14,6 +14,8 @@ module AsciidoctorBibliography
     REGEXP = /\\?(#{MACRO_NAME_REGEXP}):(?:(\S*?)?\[(|.*?[^\\])\])(?:\+(\S*?)?\[(|.*?[^\\])\])*/
     REF_ATTRIBUTES = %i[chapter page section clause].freeze
 
+    MISSING_ID_MARK = "*??*".freeze
+
     attr_reader :macro, :citation_items
 
     def initialize(macro, *target_and_attributes_list_pairs)
@@ -29,17 +31,39 @@ module AsciidoctorBibliography
       # rubocop:enable Performance/HashEachMethods
     end
 
+    def missing_ids(bibliographer)
+      m_ids = (@citation_items.map(&:key) - bibliographer.database.map { |entry| entry["id"] })
+      m_ids.map! { |id| id.nil? ? "" : id }
+    end
+
+    def any_missing_id?(bibliographer)
+      # NOTE: do not use :any? since it ignores nil
+      not missing_ids(bibliographer).empty?
+    end
+
     def render(bibliographer)
-      formatted_citation =
-        case macro
-        when "cite"
-          render_citation_with_csl(bibliographer)
-        when "fullcite"
-          render_fullcite_with_csl(bibliographer)
-        when *TEX_MACROS
-          render_texmacro_with_csl(bibliographer)
-        end
+      # NOTE: If there is any blank key we must render the entire (possibly composite)
+      # NOTE: citation as missing, as we don't have that kind of control over CSL styles.
+      if any_missing_id?(bibliographer)
+        warn "Warning: I didn't find a database entry for #{missing_ids(bibliographer)}."
+        # TODO: It would be cool to have the title attribute show the missing keys
+        # TODO: as a popup above *??* but it does not work on inline quoted text.
+        return MISSING_ID_MARK
+      end
+
+      formatted_citation = render_with_csl(bibliographer)
       wrap_up_citation citation: formatted_citation, bibliographer: bibliographer
+    end
+
+    def render_with_csl(bibliographer)
+      case macro
+      when "cite"
+        render_citation_with_csl(bibliographer)
+      when "fullcite"
+        render_fullcite_with_csl(bibliographer)
+      when *TEX_MACROS
+        render_texmacro_with_csl(bibliographer)
+      end
     end
 
     def wrap_up_citation(citation:, bibliographer:)
