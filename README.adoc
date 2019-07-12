@@ -150,6 +150,7 @@ cite:[Aa2017]+[Bb2017]+[Cc2017]
 
 You can apply a different locator to each one.
 
+IMPORTANT: when using a `prefix`, `suffix` or `text` containing `]` (the right square bracket character) remember to escape it as the corresponding HTML sequence `&amp;rsqb;`. E.g.: `cite:[Foo2019, text="see {cite} or [this&amp;rsqb; perhaps"]`.
 
 === Bibliographies
 
@@ -327,8 +328,12 @@ and can be used with a few styles:
 * `citeauthor*`
 * `citeyear`
 * `citeyearpar`
+* `nocite`
 
 To cite multiple items you can concatenate them just like with `cite`.
+
+IMPORTANT: The `nocite` macro does not provide an equivalent to the ordinary `TeX`
+wildcard notation `\nocite{*}` to print all references.
 
 All macros accept standard locators, `locator`, `suffix` and `prefix`.
 The behaviour of these parameters is designed to reproduce the one expected
@@ -344,7 +349,7 @@ You can set their style in the header:
 Accepted values are `authoryear` (default) and `numeric`.
 
 IMPORTANT: The `cite` macro and the `cite...` macros described in this section are completely
-independent mechanisms. The former is styled with `:bibliography-style:` (thousands of styles available)
+independent mechanisms. The former, along with the bibliography, is styled with `:bibliography-style:` (thousands of styles available)
 while the latter is styled with with `:bibliography-tex-style:` (much more limited, only has the
 styles listed above).
 
@@ -381,7 +386,7 @@ Values given in such way will take highest priority.
 == Development
 
 We follow Sandi Metz's Rules for this gem, you can read the
-http://robots.thoughtbot.com/post/50655960596/sandi-metz-rules-for-developers[description of the rules here].
+https://thoughtbot.com/blog/sandi-metz-rules-for-developers[description of the rules here].
 All new code should follow these rules. If you make
 changes in a file that already violates these rules, you should fix the
 violations as part of your contribution.

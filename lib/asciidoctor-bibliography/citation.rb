@@ -9,9 +9,26 @@ module AsciidoctorBibliography
     TEX_MACROS = %w[citet citet* citealt citealt* citep citep* citealp citealp*
                     citeauthor citeauthor* citeyear citeyearpar].freeze
 
-    MACRO_NAME_REGEXP = TEX_MACROS.dup.concat(%w[cite fullcite]).
+    MACRO_NAME_REGEXP = TEX_MACROS.dup.concat(%w[cite fullcite nocite]).
       map { |s| Regexp.escape s }.join("|").freeze
-    REGEXP = /\\?(#{MACRO_NAME_REGEXP}):(?:(\S*?)?\[(|.*?[^\\])\])(?:\+(\S*?)?\[(|.*?[^\\])\])*/
+
+    REGEXP = /
+      \\?  (#{MACRO_NAME_REGEXP})                # macro name
+      (
+        (?:   :  (?:\S*?)  \[(?:|.*?[^\\])\]  )  # first target with attributes list
+        (?:  \+  (?:\S*?)  \[(?:|.*?[^\\])\]  )* # other targets with wttributes lists
+      )
+    /x
+
+    MACRO_PARAMETERS_REGEXP = /
+      \G                # restart metching from here
+      (?:
+        [:+]            # separator
+        (\S*?)          # optional target
+        \[(|.*?[^\\])\] # attributes list
+      )
+    /x
+
     REF_ATTRIBUTES = %i[chapter page section clause].freeze
 
     MISSING_ID_MARK = "*??*".freeze
@@ -22,7 +39,7 @@ module AsciidoctorBibliography
       @uuid = SecureRandom.uuid
       @macro = macro
       @citation_items = []
-      target_and_attributes_list_pairs.compact.each_slice(2).each do |target, attribute_list|
+      target_and_attributes_list_pairs.each do |target, attribute_list|
         @citation_items << CitationItem.new do |cite|
           cite.target = target.to_s.empty? ? "default" : target
           cite.parse_attribute_list attribute_list
@@ -61,6 +78,8 @@ module AsciidoctorBibliography
         render_citation_with_csl(bibliographer)
       when "fullcite"
         render_fullcite_with_csl(bibliographer)
+      when "nocite"
+        ""
       when *TEX_MACROS
         render_texmacro_with_csl(bibliographer)
       end
@@ -94,24 +113,18 @@ module AsciidoctorBibliography
       formatter = Formatter.new(style, locale: bibliographer.options.locale)
       items = prepare_items bibliographer, formatter, tex: tex
       formatted_citation = formatter.engine.renderer.render(items, formatter.engine.style.citation)
-      escape_brackets_inside_xref! formatted_citation
       interpolate_formatted_citation! formatted_citation
       formatted_citation
-    end
-
-    def escape_brackets_inside_xref!(string)
-      string.gsub!(/{{{(?<xref_label>.*?)}}}/) do
-        ["[", Regexp.last_match[:xref_label].gsub("]", '\]'), "]"].join
-      end
     end
 
     def interpolate_formatted_citation!(formatted_citation)
       citation_items.each do |citation_item|
         key = Regexp.escape citation_item.key
         formatted_citation.gsub!(/___#{key}___(?<citation>.*?)___\/#{key}___/) do
-          # NOTE: this is slight overkill but easy to extend
+          # NOTE: this handles custom citation text (slight overkill but easy to extend)
+          # NOTE: escaping ] is necessary to safely nest macros (e.g. citing in a footnote)
           (citation_item.text || "{cite}").
-            sub("{cite}", Regexp.last_match[:citation])
+            sub("{cite}", Regexp.last_match[:citation].gsub("]", "&rsqb;"))
         end
       end
     end
@@ -141,7 +154,7 @@ module AsciidoctorBibliography
       wrap_item item, ci.prefix, ci.suffix if affix
       id = xref_id "bibliography", ci.target, item.id
       wrap_item item, "___#{item.id}___", "___/#{item.id}___"
-      wrap_item item, "xref:#{id}{{{", "}}}" if options.hyperlinks?
+      wrap_item item, "<<#{id},", ">>" if options.hyperlinks?
       item.label, item.locator = ci.locator
     end
 
